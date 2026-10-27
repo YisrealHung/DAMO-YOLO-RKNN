@@ -2,9 +2,14 @@
 # Copyright (C) Alibaba Group Holding Limited. All rights reserved.
 import argparse
 import copy
+import os
 
 import torch
 from loguru import logger
+
+torch.backends.cudnn.benchmark = True
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 from damo.apis import Trainer
 from damo.config.base import parse_config
@@ -28,7 +33,12 @@ def make_parser():
         type=str,
         help='plz input your config file',
     )
-    parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument(
+        '--local_rank',
+        '--local-rank',
+        type=int,
+        default=int(os.environ.get('LOCAL_RANK', 0)),
+    )
     parser.add_argument('--tea_config', type=str, default=None)
     parser.add_argument('--tea_ckpt', type=str, default=None)
     parser.add_argument(

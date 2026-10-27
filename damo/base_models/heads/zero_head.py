@@ -234,11 +234,11 @@ class ZeroHead(nn.Module):
         bbox_preds = torch.cat(bbox_preds, dim=1)
         bbox_before_softmax = torch.cat(bbox_before_softmax, dim=1)
 
-        # calculating losses
-        loss = self.loss(
-            cls_scores,
-            bbox_preds,
-            bbox_before_softmax,
+        with torch.autocast('cuda', enabled=False):
+            loss = self.loss(
+                cls_scores.float(),
+                bbox_preds.float(),
+                bbox_before_softmax.float(),
             gt_bbox_list,
             gt_cls_list,
             mlvl_priors,

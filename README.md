@@ -11,6 +11,14 @@ English | [简体中文](README_cn.md)
 
 </div>
 
+> [!NOTE]
+> **🚀 RK3588 Deployment & PyTorch 2.6+ Support Edition**
+> - **Colab One-Click Workflow:** [`DAMO_YOLO_custom_RK3588.ipynb`](DAMO_YOLO_custom_RK3588.ipynb)
+> - **Modern PyTorch Compatibility:** Fully compatible with PyTorch ≥ 2.6 (`torch.load` weights_only default resolved).
+> - **Mixed Precision Acceleration (AMP):** 1.5x~2x training speedup on modern GPUs.
+> - **RKNN-Friendly ONNX Export:** 6 raw output heads without in-graph DFL/NMS for Rockchip NPU performance.
+> - **Custom Tooling (`tools_custom/`):** Dataset converter, config generator, INT8 quantization, simulator check, and RK3588 board inference.
+
 ## Introduction
 <div align="center"><img src="assets/overview.gif" width="1500"></div>
 

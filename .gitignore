@@ -39,6 +39,7 @@ workdirs
 *.pth
 *.pb
 *.onnx
+*.rknn
 *.trt
 *.mlmodel
 *.torchscript

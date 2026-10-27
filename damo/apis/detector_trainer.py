@@ -23,6 +23,9 @@ from damo.utils import (MeterBuffer, get_model_info, get_rank, gpu_mem_usage,
 from torch.nn import GroupNorm, LayerNorm
 from torch.nn.modules.batchnorm import _BatchNorm
 NORMS = (GroupNorm, LayerNorm, _BatchNorm)
+# mixed precision training
+_AMP = (os.environ.get('DAMO_AMP', '1') == '1') and torch.cuda.is_available()
+_SCALER = torch.amp.GradScaler('cuda', enabled=_AMP)
 
 def mkdir(path):
     if not os.path.exists(path):
@@ -305,17 +308,21 @@ class Trainer:
 
             else:
 
-                outputs = self.model(inps, targets)
+                with torch.autocast('cuda', dtype=torch.float16,
+                                    enabled=_AMP):
+                    outputs = self.model(inps, targets)
                 loss = outputs['total_loss']
 
             self.optimizer.zero_grad()
-            loss.backward()
+            _SCALER.scale(loss).backward()
             if self.grad_clip is not None:
+                _SCALER.unscale_(self.optimizer)
                 nn.utils.clip_grad_norm_(self.model.parameters(),
                                          max_norm=self.grad_clip,
                                          norm_type=2)  # for stable training
 
-            self.optimizer.step()
+            _SCALER.step(self.optimizer)
+            _SCALER.update()
 
             if self.ema_model is not None:
                 self.ema_model.update(cur_iter, self.model)
