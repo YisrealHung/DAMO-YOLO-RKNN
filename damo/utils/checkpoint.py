@@ -32,7 +32,14 @@ def save_checkpoint(state, is_best, save_dir, model_name=''):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     filename = os.path.join(save_dir, model_name + '_ckpt.pth')
-    torch.save(state, filename)
+    tmp_filename = filename + '.tmp'
+    torch.save(state, tmp_filename)
+    if os.path.exists(filename):
+        os.replace(tmp_filename, filename)
+    else:
+        os.rename(tmp_filename, filename)
     if is_best:
         best_filename = os.path.join(save_dir, 'best_ckpt.pth')
-        shutil.copyfile(filename, best_filename)
+        if os.path.abspath(filename) != os.path.abspath(best_filename):
+            shutil.copyfile(filename, best_filename)
+

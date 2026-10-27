@@ -103,6 +103,19 @@ class Trainer:
         self.meter = MeterBuffer(window_size=cfg.miscs.print_interval_iters)
         self.file_name = os.path.join(cfg.miscs.output_dir, cfg.miscs.exp_name)
 
+        # best evaluation metric tracking
+        self.best_ap = -1.0
+        self.best_epoch = -1
+        best_ckpt_path = os.path.join(self.file_name, 'best_ckpt.pth')
+        if os.path.exists(best_ckpt_path):
+            try:
+                b_ckpt = torch.load(best_ckpt_path, map_location='cpu')
+                if isinstance(b_ckpt, dict):
+                    self.best_ap = b_ckpt.get('best_ap', -1.0)
+                    self.best_epoch = b_ckpt.get('best_epoch', b_ckpt.get('epoch', -1))
+            except Exception:
+                pass
+
         # setup logger
         if get_rank() == 0:
             os.makedirs(self.file_name, exist_ok=True)
@@ -385,8 +398,30 @@ class Trainer:
 
             if (cur_iter + 1) % self.eval_interval_iters == 0:
                 time.sleep(0.003)
-                self.evaluate(local_rank, self.cfg.dataset.val_ann)
+                eval_results = self.evaluate(local_rank, self.cfg.dataset.val_ann)
                 self.model.train()
+                if local_rank == 0 and eval_results:
+                    cur_ap = None
+                    for res in eval_results:
+                        if res is not None and isinstance(res, (tuple, list)) and len(res) > 0:
+                            coco_res = res[0]
+                            if hasattr(coco_res, 'results') and 'bbox' in coco_res.results:
+                                val_ap = coco_res.results['bbox'].get('AP', -1)
+                                if val_ap >= 0:
+                                    cur_ap = val_ap
+                                    break
+                    if cur_ap is not None:
+                        if cur_ap > self.best_ap:
+                            logger.info(
+                                f'---> New best mAP50-95: {cur_ap:.4f} (previous: {self.best_ap:.4f}) at epoch {self.epoch + 1}! Updating best_ckpt.pth...'
+                            )
+                            self.best_ap = cur_ap
+                            self.best_epoch = self.epoch + 1
+                            self.save_ckpt(ckpt_name='best', local_rank=local_rank)
+                        else:
+                            logger.info(
+                                f'---> Current mAP50-95: {cur_ap:.4f} (best: {self.best_ap:.4f} at epoch {self.best_epoch})'
+                            )
             synchronize()
 
             if (cur_iter + 1) % self.iters_per_epoch == 0:
@@ -399,7 +434,7 @@ class Trainer:
             if self.ema_model is not None:
                 save_model = self.ema_model.model
             else:
-                save_model = self.model.module
+                save_model = self.model.module if hasattr(self.model, 'module') else self.model
             logger.info('Save weights to {}'.format(self.file_name))
             ckpt_state = {
                 'epoch':
@@ -410,6 +445,10 @@ class Trainer:
                 self.optimizer.state_dict(),
                 'feature_loss':
                 self.feature_loss.state_dict() if self.distill else None,
+                'best_ap':
+                self.best_ap,
+                'best_epoch':
+                self.best_epoch,
             }
             save_checkpoint(
                 ckpt_state,
@@ -423,6 +462,9 @@ class Trainer:
         ckpt = torch.load(ckpt_file_path, map_location=self.device)
 
         self.model.load_state_dict(ckpt['model'])
+        if 'best_ap' in ckpt and ckpt['best_ap'] > self.best_ap:
+            self.best_ap = ckpt['best_ap']
+            self.best_epoch = ckpt.get('best_epoch', ckpt.get('epoch', -1))
         if load_optimizer:
             self.optimizer.load_state_dict(ckpt['optimizer'])
             if self.distill:
@@ -447,12 +489,15 @@ class Trainer:
                 mkdir(output_folder)
             output_folders[idx] = output_folder
 
+        eval_results = []
         for output_folder, dataset_name, data_loader_val in zip(
                 output_folders, val_ann, self.val_loader):
-            inference(
+            res = inference(
                 evalmodel,
                 data_loader_val,
                 dataset_name,
                 device=self.device,
                 output_folder=output_folder,
             )
+            eval_results.append(res)
+        return eval_results
