@@ -21,9 +21,39 @@ def make_config(repo, model_size, exp_name, class_names, output_dir,
                 ckpt_interval=10, finetune_path=None, resume_path=None,
                 num_workers=2, lite_train=True):
     assert img_size % 32 == 0, 'IMG_SIZE must be a multiple of 32'
+    os.makedirs(os.path.join(repo, 'configs'), exist_ok=True)
     template = os.path.join(repo, 'configs', TEMPLATES[model_size][0])
+    if not os.path.exists(template):
+        import urllib.request
+        url = f'https://raw.githubusercontent.com/tinyvision/DAMO-YOLO/master/configs/{TEMPLATES[model_size][0]}'
+        print(f"[make_config] Template {template} not found. Auto-downloading from {url}...")
+        try:
+            urllib.request.urlretrieve(url, template)
+        except Exception as e:
+            raise FileNotFoundError(f"Failed to find or download config template {template}: {e}")
+
+    # Also ensure nas_backbone structure file exists
+    nas_dir = os.path.join(repo, 'damo', 'base_models', 'backbones', 'nas_backbones')
+    os.makedirs(nas_dir, exist_ok=True)
+    nas_files = {
+        'T': 'tinynas_L20_k1kx.txt',
+        'S': 'tinynas_L25_k1kx.txt',
+        'M': 'tinynas_L35_kxkx.txt',
+    }
+    nas_target = os.path.join(nas_dir, nas_files.get(model_size, 'tinynas_L25_k1kx.txt'))
+    if not os.path.exists(nas_target):
+        import urllib.request
+        fn = nas_files.get(model_size, 'tinynas_L25_k1kx.txt')
+        url = f'https://raw.githubusercontent.com/tinyvision/DAMO-YOLO/master/damo/base_models/backbones/nas_backbones/{fn}'
+        print(f"[make_config] Backbone structure {nas_target} not found. Auto-downloading from {url}...")
+        try:
+            urllib.request.urlretrieve(url, nas_target)
+        except Exception:
+            pass
+
     with open(template, 'r', encoding='utf-8') as f:
         src = f.read().rstrip() + '\n'
+
     no_aug = min(16, max(1, epochs // 6))
     warmup = min(5, max(1, epochs // 20))
     overrides = {
