@@ -216,6 +216,10 @@ class MosaicWrapper(torch.utils.data.dataset.Dataset):
     def __len__(self):
         return len(self._dataset)
 
+    def preload_cache(self):
+        if hasattr(self._dataset, 'preload_cache'):
+            self._dataset.preload_cache()
+
     def __getitem__(self, inp):
         if type(inp) is tuple:
             enable_mosaic_mixup = inp[0]

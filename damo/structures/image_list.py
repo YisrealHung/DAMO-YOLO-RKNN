@@ -47,6 +47,20 @@ def to_image_list(tensors, size_divisible=0, max_size=None):
         image_sizes = [tensor.shape[-2:] for tensor in tensors]
         return ImageList(tensors, image_sizes, image_sizes)
     elif isinstance(tensors, (tuple, list)):
+        if len(tensors) == 0:
+            return ImageList(torch.empty(0), [], [])
+
+        first_shape = tensors[0].shape
+        same_shape = all(t.shape == first_shape for t in tensors)
+        stride_ok = (size_divisible <= 0) or (first_shape[-2] % size_divisible == 0 and first_shape[-1] % size_divisible == 0)
+
+        # Fast path: all images in batch have identical size and stride matches (e.g. 640x640)
+        if same_shape and stride_ok and max_size is None:
+            batched_imgs = torch.stack(tensors, dim=0).contiguous()
+            image_sizes = [first_shape[-2:]] * len(tensors)
+            pad_sizes = image_sizes
+            return ImageList(batched_imgs, image_sizes, pad_sizes)
+
         if max_size is None:
             max_size = tuple(
                 max(s) for s in zip(*[img.shape for img in tensors]))

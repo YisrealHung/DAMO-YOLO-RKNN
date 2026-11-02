@@ -203,6 +203,12 @@ class Trainer:
             mosaic_mixup=cfg.train.augment.mosaic_mixup)
         val_dataset = build_dataset(cfg, cfg.dataset.val_ann, is_train=False)
 
+        # DAMO-YOLO-Lite-Train: Warm up RAM Cache before dataloader spawns workers
+        if getattr(cfg.miscs, 'cache_ram', True) and get_rank() == 0:
+            for ds in train_dataset:
+                if hasattr(ds, 'preload_cache'):
+                    ds.preload_cache()
+
         iters_per_epoch = math.ceil(
             len(train_dataset[0]) /
             cfg.train.batch_size)  # train_dataset is a list, however,
@@ -299,8 +305,8 @@ class Trainer:
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
-            inps = inps.to(self.device)  # ImageList: tensors, img_size
-            targets = [target.to(self.device)
+            inps = inps.to(self.device, non_blocking=True)  # ImageList: tensors, img_size
+            targets = [target.to(self.device, non_blocking=True)
                        for target in targets]  # BoxList: bbox, num_boxes ...
 
             model_start_time = time.time()

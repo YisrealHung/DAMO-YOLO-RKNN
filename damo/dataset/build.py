@@ -137,6 +137,8 @@ def build_dataloader(datasets,
             num_workers=num_workers,
             batch_sampler=batch_sampler,
             collate_fn=collator,
+            pin_memory=torch.cuda.is_available(),
+            persistent_workers=(num_workers > 0),
         )
         data_loaders.append(data_loader)
     if is_train:

@@ -19,7 +19,7 @@ TEMPLATES = {
 def make_config(repo, model_size, exp_name, class_names, output_dir,
                 img_size=640, epochs=100, batch_size=16, eval_interval=5,
                 ckpt_interval=10, finetune_path=None, resume_path=None,
-                num_workers=2):
+                num_workers=2, lite_train=True):
     assert img_size % 32 == 0, 'IMG_SIZE must be a multiple of 32'
     template = os.path.join(repo, 'configs', TEMPLATES[model_size][0])
     with open(template, 'r', encoding='utf-8') as f:
@@ -31,7 +31,8 @@ def make_config(repo, model_size, exp_name, class_names, output_dir,
         'self.miscs.output_dir': output_dir,
         'self.miscs.eval_interval_epochs': eval_interval,
         'self.miscs.ckpt_interval_epochs': ckpt_interval,
-        'self.miscs.num_workers': num_workers,
+        'self.miscs.num_workers': min(num_workers, 2) if lite_train else num_workers,
+        'self.miscs.cache_ram': lite_train,
         'self.train.batch_size': batch_size,
         'self.train.total_epochs': epochs,
         'self.train.no_aug_epochs': no_aug,
@@ -47,6 +48,9 @@ def make_config(repo, model_size, exp_name, class_names, output_dir,
         'self.train.augment.mosaic_mixup.mosaic_size': (img_size, img_size),
         'self.test.augment.transform.image_max_range': (img_size, img_size),
     }
+    if lite_train:
+        # Disable heavy CPU box-level autoaugment (SADA) for ultra-fast training
+        overrides['self.train.augment.transform.autoaug_dict'] = None
     lines = ['', '        # ---- custom dataset overrides (generated) ----']
     lines += [f'        {k} = {v!r}' for k, v in overrides.items()]
     out = os.path.join(repo, 'configs', f'{exp_name}.py')
